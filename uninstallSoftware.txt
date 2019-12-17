@@ -1,0 +1,207 @@
+
+cls
+$RemoteComputers=Get-Content C:\test\serverList.txt 
+
+$output="C:\test\output.csv"
+$log="C:\test\log.txt"
+
+If (Test-Path $output){
+	Remove-Item $output
+}
+
+If (Test-Path $log){
+	Remove-Item $log
+}
+
+
+##<#
+Function Get-Cred
+{
+    try
+    {
+        $a=get-credential
+        $u = $a.username
+        $user = $u.split("\")
+        $p = $a.password
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($p)
+        $pass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    }   
+    catch
+    {
+            $l= New-Object -ComObject wscript.shell
+            if($m -eq '1')
+            {
+                write-host 'Script cancelled'
+                $host.SetShouldExit(1)
+                exit
+            }
+            else
+            {
+                exit
+            }
+    }       
+    return $a
+}   
+
+
+$cred=get-cred
+
+#>
+
+ForEach ($Computer in $RemoteComputers)
+{
+
+If (Test-Connection -ComputerName $Computer -Quiet)
+
+{
+
+
+Write-Host "able to connect to $Computer" -ForegroundColor Yellow
+
+
+
+$scriptBlock = { 
+
+
+###########################uninstall SCCM client####################################
+
+C:\windows\ccmsetup\ccmsetup.exe /uninstall 
+
+start-sleep 10
+$service = Get-Service -ServiceName 'ccmexec' -ErrorAction SilentlyContinue
+
+if ($service.Length -gt 0) {
+    $serverName=hostname
+       Write-Output "sccm client NOT uinstalled `n"
+
+   
+   
+    }
+
+    else
+    {
+    $serverName=hostname
+        Write-Output "SUCCESSFULLY uninstalled  sccm client `n"
+
+    }
+
+
+###########################MDOP MBAM####################################
+
+    $program='MDOP MBAM'
+$app = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -match “$program”} -ErrorAction SilentlyContinue
+$val=$app.Uninstall() 
+$returnValue=Get-WmiObject -Class Win32_Product |?{$_.name -eq $program}|select name|foreach{$_.name} -ErrorAction SilentlyContinue
+
+
+
+if($returnValue -eq $program)
+{
+
+$serverName=hostname
+Write-output "$program NOT uninstalled `n"
+
+
+}
+
+else
+{
+    $serverName=hostname
+Write-Output "SUCCESSFULLY uninstalled  $program `n "
+
+}
+
+###########################uninstall trend micro####################################
+
+cd C:\Users\QWLEU-adm\Downloads\CUT3.3_forAll
+#dir
+#cmd.exe /c cd
+cmd.exe /c cut -noinstall|out-null
+
+
+
+$antivirusName='Trend Micro OfficeScan Agent'
+
+
+$antivirusInfo=Get-WmiObject -Class Win32_Product |?{$_.name -eq $antivirusName}|select name|foreach{$_.name} -ErrorAction SilentlyContinue
+
+if($antivirusInfo -eq $antivirusName)
+{
+
+$serverName=hostname
+Write-Output "$antivirusName NOT uninstalled `n"
+
+}
+
+else
+{
+    $serverName=hostname
+Write-Output "SUCCESSFULLY uninstalled $antivirusName `n"
+
+}
+
+
+
+
+#############################################################################################>
+
+
+
+
+} #end of script block
+
+
+     Try
+         {
+
+            
+          $out=   Invoke-Command -ComputerName $Computer -ScriptBlock $scriptBlock -Credential $cred -ErrorAction Continue
+         
+         
+         
+         } #end of try
+   
+   
+     Catch
+         {
+             Write-Host "unavaible to connect to $Computer" -ForegroundColor Yellow
+         } #end of catch
+
+
+ 
+ $FinalResult = @()
+ForEach ($line in $($out -split "`r`n"))
+{
+$FinalResult+=$line
+    #Write-host $Line -ForegroundColor Green
+}
+
+Write-host $FinalResult[0] -ForegroundColor Green
+Write-host $FinalResult[1] -ForegroundColor Green
+write-host $FinalResult[2] -ForegroundColor Green
+
+$ccmStatus=$FinalResult[0] 
+$mdopStatus=$FinalResult[1] 
+$antivirusStatus=$FinalResult[2] 
+
+
+$data = @(
+    [pscustomobject]@{
+    'ServerName'=$Computer
+       'SCCM client status' = $ccmStatus
+      'MDOP MBAM status' = $mdopStatus
+      'Antivirus Status' = $antivirusStatus
+    }
+    
+)
+
+$data | Export-Csv -Path $output -Append -NoTypeInformation
+
+} ##end of if
+
+else{
+             Write-Host "unavaible to connect to $Computer" -ForegroundColor Yellow
+             Write-Output "unavaible to connect to $Computer" |out-file -FilePath $log -Append
+}
+
+} #end of for loop

@@ -1,0 +1,5 @@
+output of uninstalling antivirus
+
+
+  this is 64bit OS.... Running common uninstall tool for OSCE agent..... Finished running common uninstall tool for OSCE. OSCE REG has not been removed completely.  Finished running 
+MSI clean bat.... OSCE uninstall key remains, delete it. Finished.... You need to reboot PC once finally! SUCCESSFULLY uninstalled Trend Micro OfficeScan Agent 
